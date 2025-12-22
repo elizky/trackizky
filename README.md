@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Logiski — To-Do List de Ejecución (Next + Supabase)
 
-## Getting Started
+Checklist simple para ir trackeando el avance del proyecto sin ruido.
 
-First, run the development server:
+⸻
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+🟢 FASE 0 — Decisiones cerradas
+	•	Confirmar nombre del proyecto (Logiski / Trakiski)
+	•	Confirmar stack: Next.js + Supabase
+	•	Confirmar que el MVP tiene solo 2 páginas (Registro + Stats)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+⸻
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+🟢 FASE 1 — Setup base
+	•	Crear proyecto Next.js (App Router)
+	•	Inicializar repo
+	•	Configurar PWA (manifest + icons)
+	•	Crear proyecto en Supabase
+	•	Guardar keys en .env
+	•	Conectar Next con Supabase SDK
+	•	Verificar conexión con un fetch simple
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+⸻
 
-## Learn More
+🟢 FASE 2 — Auth (aprendizaje clave)
+	•	Habilitar Email/Password en Supabase
+	•	Crear página de Login
+	•	Crear página de Signup
+	•	Manejar sesión activa
+	•	Proteger rutas privadas (middleware)
+	•	Logout funcional
+	•	Persistencia de sesión al refresh
 
-To learn more about Next.js, take a look at the following resources:
+⸻
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+🟢 FASE 3 — Modelo de datos
+	•	Crear tabla activities
+	•	Crear tabla day_logs
+	•	Crear tabla day_log_activities
+	•	Definir constraints (1 log por día)
+	•	Seed inicial de actividades
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+⸻
 
-## Deploy on Vercel
+🟢 FASE 4 — Página principal (“Ayer hice”)
+	•	Calcular fecha de ayer
+	•	Chequear si ayer ya fue registrado
+	•	Listar actividades
+	•	UI de selección múltiple (checkbox)
+	•	Botón Guardar
+	•	Persistir DayLog
+	•	Manejar caso “guardar sin seleccionar”
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+⸻
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+🟢 FASE 5 — Página de estadísticas
+	•	Vista calendario / heatmap
+	•	Gráfico de frecuencia por actividad
+	•	Calcular racha actual
+	•	Calcular racha máxima
+	•	Mostrar última vez registrada
+
+⸻
+
+🟢 FASE 6 — UX mínima
+	•	Mobile-first
+	•	Tipografías legibles
+	•	Estados vacíos claros
+	•	Sin mensajes motivacionales
+
+⸻
+
+🟢 FASE 7 — Instalación y uso real
+	•	Instalar PWA en iPhone
+	•	Instalar PWA en iPad
+	•	Usar la app durante 3 días seguidos
+	•	Anotar fricciones reales
+
+⸻
+
+🔴 Fuera de alcance (NO hacer ahora)
+	•	❌ Dark mode
+	•	❌ Edición histórica
+	•	❌ Exportar datos
+	•	❌ Features nuevas
+
+⸻
+
+✅ Definición de terminado
+	•	Registro diario se hace en <10 segundos
+	•	Stats se entienden sin explicación
+	•	No hay bugs bloqueantes
+	•	La app se usa sin pensar
+
+
+
+    ugsOdjUG3CnrkA70
