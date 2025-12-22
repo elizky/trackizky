@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Ubuntu, Ubuntu_Mono } from 'next/font/google';
 import './globals.css';
-import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 
 const ubuntuSans = Ubuntu({
   variable: '--font-ubuntu-sans',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

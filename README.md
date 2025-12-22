@@ -1,97 +1,52 @@
-Logiski — To-Do List de Ejecución (Next + Supabase)
+# Trackizky
 
-Checklist simple para ir trackeando el avance del proyecto sin ruido.
+Daily activity tracking app. Personal use.
 
-⸻
+## Stack
 
-🟢 FASE 0 — Decisiones cerradas
-	•	Confirmar nombre del proyecto (Logiski / Trakiski)
-	•	Confirmar stack: Next.js + Supabase
-	•	Confirmar que el MVP tiene solo 2 páginas (Registro + Stats)
+- Next.js 15 (App Router)
+- Supabase (PostgreSQL)
+- Tailwind CSS
+- PWA
 
-⸻
+## Features
 
-🟢 FASE 1 — Setup base
-	•	Crear proyecto Next.js (App Router)
-	•	Inicializar repo
-	•	Configurar PWA (manifest + icons)
-	•	Crear proyecto en Supabase
-	•	Guardar keys en .env
-	•	Conectar Next con Supabase SDK
-	•	Verificar conexión con un fetch simple
+- [x] Register yesterday's activities
+- [x] View activity history
+- [x] PWA installable (iOS/Android)
+- [x] Mobile-first UI
 
-⸻
+## Database Schema
 
-🟢 FASE 2 — Auth (aprendizaje clave)
-	•	Habilitar Email/Password en Supabase
-	•	Crear página de Login
-	•	Crear página de Signup
-	•	Manejar sesión activa
-	•	Proteger rutas privadas (middleware)
-	•	Logout funcional
-	•	Persistencia de sesión al refresh
+```
+activities (id, label, category)
+    ↑
+day_log_activities (id, day_log_id, activity_id)
+    ↓
+day_logs (id, date, created_at)
+```
 
-⸻
+## Setup
 
-🟢 FASE 3 — Modelo de datos
-	•	Crear tabla activities
-	•	Crear tabla day_logs
-	•	Crear tabla day_log_activities
-	•	Definir constraints (1 log por día)
-	•	Seed inicial de actividades
+```bash
+npm install
+```
 
-⸻
+Create `.env.local`:
 
-🟢 FASE 4 — Página principal (“Ayer hice”)
-	•	Calcular fecha de ayer
-	•	Chequear si ayer ya fue registrado
-	•	Listar actividades
-	•	UI de selección múltiple (checkbox)
-	•	Botón Guardar
-	•	Persistir DayLog
-	•	Manejar caso “guardar sin seleccionar”
+```
+NEXT_PUBLIC_SUPABASE_URL=your_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_key
+```
 
-⸻
+```bash
+npm run dev
+```
 
-🟢 FASE 5 — Página de estadísticas
-	•	Vista calendario / heatmap
-	•	Gráfico de frecuencia por actividad
-	•	Calcular racha actual
-	•	Calcular racha máxima
-	•	Mostrar última vez registrada
+## Pending
 
-⸻
-
-🟢 FASE 6 — UX mínima
-	•	Mobile-first
-	•	Tipografías legibles
-	•	Estados vacíos claros
-	•	Sin mensajes motivacionales
-
-⸻
-
-🟢 FASE 7 — Instalación y uso real
-	•	Instalar PWA en iPhone
-	•	Instalar PWA en iPad
-	•	Usar la app durante 3 días seguidos
-	•	Anotar fricciones reales
-
-⸻
-
-🔴 Fuera de alcance (NO hacer ahora)
-	•	❌ Dark mode
-	•	❌ Edición histórica
-	•	❌ Exportar datos
-	•	❌ Features nuevas
-
-⸻
-
-✅ Definición de terminado
-	•	Registro diario se hace en <10 segundos
-	•	Stats se entienden sin explicación
-	•	No hay bugs bloqueantes
-	•	La app se usa sin pensar
-
-
-
-    ugsOdjUG3CnrkA70
+- [ ] Calendar / heatmap view
+- [ ] Activity frequency chart
+- [ ] Current streak calculation
+- [ ] Max streak calculation
+- [ ] Last registered date per activity
