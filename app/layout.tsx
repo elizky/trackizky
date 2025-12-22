@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Ubuntu, Ubuntu_Mono } from 'next/font/google';
 import './globals.css';
-import ServiceWorkerRegistration from './components/ServiceWorkerRegistration';
+import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
 
 const ubuntuSans = Ubuntu({
   variable: '--font-ubuntu-sans',
@@ -36,7 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang='en'>
-      <body className={`${ubuntuSans.variable} ${ubuntuMono.variable} antialiased`}>
+      <body className={`${ubuntuSans.variable} ${ubuntuMono.variable} antialiased bg-background`}>
         <ServiceWorkerRegistration />
         {children}
       </body>
