@@ -16,9 +16,7 @@ export default function History({ logs, activities }: HistoryProps) {
   const renderLogs = () =>
     logs.map((log) => (
       <Card key={log.date}>
-        <CardHeader className='font-mono text-primary'>
-          {formatDisplayDate(new Date(log.date))}
-        </CardHeader>
+        <CardHeader className='font-mono text-primary'>{formatDisplayDate(log.date)}</CardHeader>
         <CardContent className='flex flex-wrap gap-4'>
           {log.activities.length === 0 ? (
             <span className='text-foreground/40 text-sm'>Sin actividades</span>

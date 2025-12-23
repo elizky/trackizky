@@ -20,11 +20,17 @@ export const formatDate = (date: Date): string => {
   return date.toISOString().split('T')[0];
 };
 
-export const formatDisplayDate = (date: Date): string => {
-  const weekday = date.toLocaleDateString('es-ES', { weekday: 'short' });
-  const day = date.getDate();
-  const month = date.toLocaleDateString('es-ES', { month: 'short' });
-  const year = date.getFullYear();
+export const parseDateString = (dateStr: string): Date => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+export const formatDisplayDate = (date: Date | string): string => {
+  const d = typeof date === 'string' ? parseDateString(date) : date;
+  const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' });
+  const day = d.getDate();
+  const month = d.toLocaleDateString('es-ES', { month: 'short' });
+  const year = d.getFullYear();
 
   const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
   const capitalizedMonth = month.charAt(0).toUpperCase() + month.slice(1);
