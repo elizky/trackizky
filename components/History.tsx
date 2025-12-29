@@ -1,10 +1,8 @@
-'use client';
-
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { formatDisplayDate, getActivityLabel } from '@/lib/utils';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { HistoryProps } from '@/lib/types';
+import Heatmap from './heatmap';
+import { Logs } from './Logs';
 
 export default function History({ logs, activities }: HistoryProps) {
   const renderNoLogs = () => (
@@ -12,24 +10,6 @@ export default function History({ logs, activities }: HistoryProps) {
       <p className='text-foreground/60'>No hay registros aún</p>
     </div>
   );
-
-  const renderLogs = () =>
-    logs.map((log) => (
-      <Card key={log.date}>
-        <CardHeader className='font-mono text-primary'>{formatDisplayDate(log.date)}</CardHeader>
-        <CardContent className='flex flex-wrap gap-4'>
-          {log.activities.length === 0 ? (
-            <span className='text-foreground/40 text-sm'>Sin actividades</span>
-          ) : (
-            log.activities.map((activityId) => (
-              <span key={activityId} className='px-3 py-1 bg-muted text-sm rounded-full'>
-                {getActivityLabel(activityId, activities)}
-              </span>
-            ))
-          )}
-        </CardContent>
-      </Card>
-    ));
 
   return (
     <div className='min-h-screen bg-background flex flex-col max-w-2xl mx-auto'>
@@ -47,7 +27,8 @@ export default function History({ logs, activities }: HistoryProps) {
         </div>
       </div>
       <div className='space-y-4 px-4 md:px-8'>
-        {logs.length === 0 ? renderNoLogs() : renderLogs()}
+        <Heatmap activities={activities} logs={logs} />
+        {logs.length === 0 ? renderNoLogs() : <Logs activities={activities} logs={logs} />}
       </div>
     </div>
   );

@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     title: 'Trackizky',
   },
   icons: {
-    apple: '/apple-icon-180.png',
+    apple: '/trackizky.png',
   },
 };
 
