@@ -3,6 +3,7 @@
 import { createClient } from './server';
 import { cookies } from 'next/headers';
 import { Activity, LogEntry } from '@/lib/types';
+import { formatDate } from '@/lib/utils';
 
 export async function getActivities(): Promise<Activity[]> {
   const supabase = createClient(await cookies());
@@ -14,6 +15,14 @@ export async function getActivities(): Promise<Activity[]> {
 }
 
 export async function saveLog(date: string, activityIds: string[]): Promise<void> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = formatDate(today);
+
+  if (date >= todayStr) {
+    throw new Error('No se puede guardar el día de hoy o fechas futuras');
+  }
+
   const supabase = createClient(await cookies());
 
   const { data: dayLog, error: dayLogError } = await supabase
@@ -77,4 +86,33 @@ export async function getAllLogs(): Promise<LogEntry[]> {
     date: log.date,
     activities: log.day_log_activities.map((a: { activity_id: string }) => a.activity_id),
   }));
+}
+
+export async function deleteLogByDate(date: string): Promise<void> {
+  const supabase = createClient(await cookies());
+
+  const { data: dayLog, error: findError } = await supabase
+    .from('day_logs')
+    .select('id')
+    .eq('date', date)
+    .single();
+
+  if (findError) {
+    if (findError.code === 'PGRST116') return; // Not found, nothing to delete
+    throw new Error(findError.message);
+  }
+
+  const { error: deleteActivitiesError } = await supabase
+    .from('day_log_activities')
+    .delete()
+    .eq('day_log_id', dayLog.id);
+
+  if (deleteActivitiesError) throw new Error(deleteActivitiesError.message);
+
+  const { error: deleteLogError } = await supabase
+    .from('day_logs')
+    .delete()
+    .eq('id', dayLog.id);
+
+  if (deleteLogError) throw new Error(deleteLogError.message);
 }
