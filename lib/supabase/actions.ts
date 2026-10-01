@@ -1,118 +1,127 @@
 'use server';
 
-import { createClient } from './server';
+import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
-import { Activity, LogEntry } from '@/lib/types';
-import { formatDate } from '@/lib/utils';
+import { DailyLog } from '@/lib/types';
+import { todayInAR } from '@/lib/utils';
+import { createClient } from './server';
 
-export async function getActivities(): Promise<Activity[]> {
-  const supabase = createClient(await cookies());
+type DailyLogRow = {
+  date: string;
+  no_alcohol: boolean;
+  food: boolean;
+  water: boolean;
+  no_screens: boolean;
+  no_delivery: boolean;
+  no_vice: boolean;
+  ex_tennis: boolean;
+  ex_football: boolean;
+  ex_walk: boolean;
+  ex_gym: boolean;
+  art_write: boolean;
+  art_draw: boolean;
+  art_read: boolean;
+  art_music: boolean;
+  weight: number | string | null;
+  sleep_hours: number | string | null;
+  energy: number | null;
+  mood: number | null;
+};
 
-  const { data, error } = await supabase.from('activities').select('id, label, category');
+const COLUMNS =
+  'date, no_alcohol, food, water, no_screens, no_delivery, no_vice, ex_tennis, ex_football, ex_walk, ex_gym, art_write, art_draw, art_read, art_music, weight, sleep_hours, energy, mood';
 
-  if (error) throw new Error(error.message);
-  return data || [];
+function numberOrNull(value: number | string | null): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
-export async function saveLog(date: string, activityIds: string[]): Promise<void> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = formatDate(today);
-
-  if (date >= todayStr) {
-    throw new Error('No se puede guardar el día de hoy o fechas futuras');
-  }
-
-  const supabase = createClient(await cookies());
-
-  const { data: dayLog, error: dayLogError } = await supabase
-    .from('day_logs')
-    .upsert({ date }, { onConflict: 'date' })
-    .select('id')
-    .single();
-
-  if (dayLogError) throw new Error(dayLogError.message);
-
-  const { error: deleteError } = await supabase
-    .from('day_log_activities')
-    .delete()
-    .eq('day_log_id', dayLog.id);
-
-  if (deleteError) throw new Error(deleteError.message);
-
-  if (activityIds.length > 0) {
-    const { error: insertError } = await supabase.from('day_log_activities').insert(
-      activityIds.map((activityId) => ({
-        day_log_id: dayLog.id,
-        activity_id: activityId,
-      }))
-    );
-
-    if (insertError) throw new Error(insertError.message);
-  }
-}
-
-export async function getLogByDate(date: string): Promise<LogEntry | null> {
-  const supabase = createClient(await cookies());
-
-  const { data, error } = await supabase
-    .from('day_logs')
-    .select('date, day_log_activities(activity_id)')
-    .eq('date', date)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') return null; // Not found
-    throw new Error(error.message);
-  }
-
+function fromRow(row: DailyLogRow): DailyLog {
   return {
-    date: data.date,
-    activities: data.day_log_activities.map((a: { activity_id: string }) => a.activity_id),
+    date: row.date.slice(0, 10),
+    noAlcohol: row.no_alcohol,
+    food: row.food,
+    water: row.water,
+    noScreens: row.no_screens,
+    noDelivery: row.no_delivery,
+    noVice: row.no_vice,
+    exTennis: row.ex_tennis,
+    exFootball: row.ex_football,
+    exWalk: row.ex_walk,
+    exGym: row.ex_gym,
+    artWrite: row.art_write,
+    artDraw: row.art_draw,
+    artRead: row.art_read,
+    artMusic: row.art_music,
+    weight: numberOrNull(row.weight),
+    sleepHours: numberOrNull(row.sleep_hours),
+    energy: row.energy,
+    mood: row.mood,
   };
 }
 
-export async function getAllLogs(): Promise<LogEntry[]> {
-  const supabase = createClient(await cookies());
+function measure(value: number | null, max: number, label: string): number | null {
+  if (value == null) return null;
+  if (!Number.isFinite(value) || value < 0 || value > max) {
+    throw new Error(`${label} inválido`);
+  }
+  return Math.round(value * 10) / 10;
+}
 
+function score(value: number | null, label: string): number | null {
+  if (value == null) return null;
+  if (!Number.isInteger(value) || value < 1 || value > 10) {
+    throw new Error(`${label} inválido`);
+  }
+  return value;
+}
+
+export async function getLogs(): Promise<DailyLog[]> {
+  const supabase = createClient(await cookies());
   const { data, error } = await supabase
-    .from('day_logs')
-    .select('date, day_log_activities(activity_id)')
+    .from('daily_logs')
+    .select(COLUMNS)
     .order('date', { ascending: false });
 
   if (error) throw new Error(error.message);
-
-  return (data || []).map((log) => ({
-    date: log.date,
-    activities: log.day_log_activities.map((a: { activity_id: string }) => a.activity_id),
-  }));
+  return (data ?? []).map(fromRow);
 }
 
-export async function deleteLogByDate(date: string): Promise<void> {
-  const supabase = createClient(await cookies());
-
-  const { data: dayLog, error: findError } = await supabase
-    .from('day_logs')
-    .select('id')
-    .eq('date', date)
-    .single();
-
-  if (findError) {
-    if (findError.code === 'PGRST116') return; // Not found, nothing to delete
-    throw new Error(findError.message);
+export async function saveLog(input: Omit<DailyLog, 'date'>): Promise<string | null> {
+  const date = todayInAR();
+  let row;
+  try {
+    row = {
+      date,
+      no_alcohol: input.noAlcohol,
+      food: input.food,
+      water: input.water,
+      no_screens: input.noScreens,
+      no_delivery: input.noDelivery,
+      no_vice: input.noVice,
+      ex_tennis: input.exTennis,
+      ex_football: input.exFootball,
+      ex_walk: input.exWalk,
+      ex_gym: input.exGym,
+      art_write: input.artWrite,
+      art_draw: input.artDraw,
+      art_read: input.artRead,
+      art_music: input.artMusic,
+      weight: measure(input.weight, 400, 'Peso'),
+      sleep_hours: measure(input.sleepHours, 24, 'Sueño'),
+      energy: score(input.energy, 'Energía'),
+      mood: score(input.mood, 'Ánimo'),
+      updated_at: new Date().toISOString(),
+    };
+  } catch (error) {
+    return error instanceof Error ? error.message : 'Error al guardar';
   }
 
-  const { error: deleteActivitiesError } = await supabase
-    .from('day_log_activities')
-    .delete()
-    .eq('day_log_id', dayLog.id);
+  const supabase = createClient(await cookies());
+  const { error } = await supabase.from('daily_logs').upsert(row, { onConflict: 'date' });
 
-  if (deleteActivitiesError) throw new Error(deleteActivitiesError.message);
-
-  const { error: deleteLogError } = await supabase
-    .from('day_logs')
-    .delete()
-    .eq('id', dayLog.id);
-
-  if (deleteLogError) throw new Error(deleteLogError.message);
+  if (error) return error.message;
+  revalidatePath('/');
+  return null;
 }

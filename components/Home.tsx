@@ -1,120 +1,368 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { Check } from 'lucide-react';
-import { getYesterday, formatDate, formatDisplayDate } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { HomeProps } from '@/lib/types';
-import { saveLog as saveLogToDb } from '@/lib/supabase/actions';
+import { isPerfect, streak } from '@/lib/challenge';
+import { saveLog } from '@/lib/supabase/actions';
+import { DailyLog, emptyLog } from '@/lib/types';
+import { cn, daysInMonth, monthDates } from '@/lib/utils';
 
-export default function Home({ activities, initialLog }: HomeProps) {
-  const yesterday = getYesterday();
-  const yesterdayDateStr = formatDate(yesterday);
+const RULES = [
+  { key: 'noAlcohol', label: 'Sin alcohol' },
+  { key: 'food', label: 'Comida' },
+  { key: 'water', label: 'Agua' },
+  { key: 'noScreens', label: 'Sin pantallas' },
+  { key: 'noDelivery', label: 'Sin delivery' },
+  { key: 'noVice', label: 'Sin vicio' },
+] as const;
 
-  const [selectedActivities, setSelectedActivities] = useState<string[]>(
-    initialLog?.activities || []
+const EXERCISE = [
+  { key: 'exTennis', label: 'Tenis' },
+  { key: 'exFootball', label: 'Fútbol' },
+  { key: 'exWalk', label: 'Caminata' },
+  { key: 'exGym', label: 'Gym' },
+] as const;
+
+const ART = [
+  { key: 'artWrite', label: 'Escribir' },
+  { key: 'artDraw', label: 'Dibujar' },
+  { key: 'artRead', label: 'Leer' },
+  { key: 'artMusic', label: 'Música' },
+] as const;
+
+type BoolKey = (typeof RULES)[number]['key'] | (typeof EXERCISE)[number]['key'] | (typeof ART)[number]['key'];
+
+function parseMeasure(raw: string): number | null {
+  const trimmed = raw.trim().replace(',', '.');
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  return Number.isFinite(value) ? value : Number.NaN;
+}
+
+function formatMeasure(value: number | null): string {
+  return value == null ? '' : String(value);
+}
+
+function showMeasure(value: number | null): string {
+  return value == null ? '---' : String(value);
+}
+
+function Check({
+  on,
+  label,
+  onToggle,
+}: {
+  on: boolean;
+  label: string;
+  onToggle?: () => void;
+}) {
+  const mark = <span className={on ? 'text-primary' : 'text-foreground/30'}>{on ? '☑' : '☐'}</span>;
+
+  if (!onToggle) {
+    return (
+      <div className='flex items-center gap-3 py-1.5 font-mono'>
+        {mark}
+        <span className={on ? '' : 'text-foreground/40'}>{label}</span>
+      </div>
+    );
+  }
+
+  return (
+    <button type='button' onClick={onToggle} className='flex w-full items-center gap-3 py-1.5 text-left font-mono'>
+      {mark}
+      {label}
+    </button>
   );
-  const [isSaved, setIsSaved] = useState(!!initialLog);
+}
+
+function Score({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  onChange: (value: number | null) => void;
+}) {
+  return (
+    <div className='mb-5'>
+      <div className='mb-2 font-mono text-sm'>{label}</div>
+      <div className='flex flex-wrap gap-1'>
+        {Array.from({ length: 10 }, (_, index) => index + 1).map((n) => (
+          <button
+            key={n}
+            type='button'
+            onClick={() => onChange(value === n ? null : n)}
+            className={cn(
+              'h-9 w-9 border font-mono text-sm',
+              value === n
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-foreground/20 text-foreground/70'
+            )}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function Home({
+  today,
+  initialLog,
+  logs,
+}: {
+  today: string;
+  initialLog: DailyLog | null;
+  logs: DailyLog[];
+}) {
+  const [log, setLog] = useState<DailyLog | null>(initialLog);
+  const [history, setHistory] = useState(logs);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<DailyLog>(initialLog ?? emptyLog(today));
+  const [weight, setWeight] = useState(formatMeasure(initialLog?.weight ?? null));
+  const [sleepHours, setSleepHours] = useState(formatMeasure(initialLog?.sleepHours ?? null));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const toggleActivity = (activityId: string) => {
-    if (isSaved) return;
-    setSelectedActivities((prev) =>
-      prev.includes(activityId) ? prev.filter((id) => id !== activityId) : [...prev, activityId]
-    );
+  const day = Number(today.slice(8));
+  const showForm = !log || editing;
+
+  const toggle = (key: BoolKey) => {
+    setDraft((current) => ({ ...current, [key]: !current[key] }));
   };
 
-  const saveLog = async () => {
+  const openEdit = () => {
+    const source = log ?? emptyLog(today);
+    setDraft(source);
+    setWeight(formatMeasure(source.weight));
+    setSleepHours(formatMeasure(source.sleepHours));
+    setError(null);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    const parsedWeight = parseMeasure(weight);
+    const parsedSleep = parseMeasure(sleepHours);
+    if (Number.isNaN(parsedWeight) || Number.isNaN(parsedSleep)) {
+      setError('Peso o sueño no es un número.');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
+    const next: DailyLog = {
+      ...draft,
+      date: today,
+      weight: parsedWeight,
+      sleepHours: parsedSleep,
+    };
 
-    try {
-      await saveLogToDb(yesterdayDateStr, selectedActivities);
-      setIsSaved(true);
-    } catch {
-      setError('Error al guardar. Intentá de nuevo.');
-    } finally {
+    const message = await saveLog(next);
+    if (message) {
+      setError(message);
       setIsSaving(false);
+      return;
     }
+
+    setLog(next);
+    setHistory((current) => [next, ...current.filter((entry) => entry.date !== today)]);
+    setEditing(false);
+    setIsSaving(false);
   };
 
+  const saved = log;
+  const run = streak(history, today);
+
   return (
-    <div className='min-h-screen flex flex-col max-w-2xl mx-auto'>
-      {/* Header */}
-      <div className='p-4 md:p-8 pb-6'>
-        <div className='flex items-center justify-between mb-4'>
-          <h1 className='text-2xl font-medium font-mono text-primary'>Trackizky</h1>
-          {isSaved && (
-            <Link
-              href='/history'
-              className='text-sm text-foreground hover:underline underline-offset-2 transition-colors'
-            >
-              Stats
-            </Link>
-          )}
-        </div>
-        <p className='text-sm text-foreground/60'>Ayer — {formatDisplayDate(yesterday)}</p>
-      </div>
+    <main className='mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 md:px-8'>
+      <header className='mb-8'>
+        <h1 className='font-mono text-2xl text-primary'>OCTOBER RESET</h1>
+        <p className='mt-2 font-mono text-sm text-foreground/70'>
+          Día {String(day).padStart(2, '0')} / {daysInMonth(today)}
+        </p>
+      </header>
 
-      {/* Content */}
-      <div className='flex-1 overflow-y-auto px-4 md:px-8 pb-24 md:pb-32'>
-        {isSaved ? (
-          <Card className='mb-6 text-center'>
-            <CardContent className='pt-6'>
-              <div className='flex items-center justify-center gap-2 text-foreground/80 mb-4'>
-                <Check className='h-5 w-5' color='var(--primary)' />
-                <span>Ayer ya fue registrado</span>
-              </div>
-              <Link
-                href='/history'
-                className='text-sm text-foreground/60 hover:text-foreground transition-colors underline'
-              >
-                Ver estadísticas
-              </Link>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            {error && (
-              <div className='p-4 mb-4 rounded-lg border border-red-500/50 bg-red-500/10 text-foreground'>
-                {error}
-              </div>
-            )}
-
-            <div className='space-y-6 mb-6'>
-              {activities.map((activity) => (
-                <Button
-                  key={activity.id}
-                  onClick={() => toggleActivity(activity.id)}
-                  variant={selectedActivities.includes(activity.id) ? 'default' : 'outline'}
-                  className={`w-full p-6 text-left justify-start ${
-                    selectedActivities.includes(activity.id) ? 'bg-foreground text-background' : ''
-                  }`}
-                >
-                  {activity.label}
-                </Button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Sticky Save Button */}
-      {!isSaved && (
-        <div className='fixed bottom-0 left-0 right-0 p-4 md:p-8 bg-background border-t border-foreground/20 max-w-2xl mx-auto'>
-          <Button
-            onClick={saveLog}
-            disabled={isSaving}
-            className='w-full p-4 bg-primary text-primary-foreground hover:opacity-90'
-            size='lg'
-          >
-            {isSaving ? 'Guardando...' : 'Guardar'}
-          </Button>
-        </div>
+      {error && (
+        <p className='mb-4 border border-red-500/50 bg-red-500/10 p-3 font-mono text-sm'>{error}</p>
       )}
+
+      {showForm ? (
+        <div className='pb-24'>
+          <section className='mb-6'>
+            {RULES.map((item) => (
+              <Check
+                key={item.key}
+                on={draft[item.key]}
+                label={item.label}
+                onToggle={() => toggle(item.key)}
+              />
+            ))}
+          </section>
+
+          <section className='mb-6'>
+            <h2 className='mb-1 font-mono text-xs uppercase tracking-widest text-foreground/50'>Ejercicio</h2>
+            {EXERCISE.map((item) => (
+              <Check
+                key={item.key}
+                on={draft[item.key]}
+                label={item.label}
+                onToggle={() => toggle(item.key)}
+              />
+            ))}
+          </section>
+
+          <section className='mb-8'>
+            <h2 className='mb-1 font-mono text-xs uppercase tracking-widest text-foreground/50'>Arte</h2>
+            {ART.map((item) => (
+              <Check
+                key={item.key}
+                on={draft[item.key]}
+                label={item.label}
+                onToggle={() => toggle(item.key)}
+              />
+            ))}
+          </section>
+
+          <label className='mb-4 block'>
+            <span className='mb-2 block font-mono text-sm'>Peso</span>
+            <input
+              inputMode='decimal'
+              value={weight}
+              onChange={(event) => setWeight(event.target.value)}
+              className='w-full border border-foreground/20 bg-transparent px-3 py-2 font-mono outline-none focus:border-primary'
+            />
+          </label>
+
+          <label className='mb-5 block'>
+            <span className='mb-2 block font-mono text-sm'>Sueño</span>
+            <input
+              inputMode='decimal'
+              value={sleepHours}
+              onChange={(event) => setSleepHours(event.target.value)}
+              className='w-full border border-foreground/20 bg-transparent px-3 py-2 font-mono outline-none focus:border-primary'
+            />
+          </label>
+
+          <Score
+            label='Energía'
+            value={draft.energy}
+            onChange={(energy) => setDraft((current) => ({ ...current, energy }))}
+          />
+          <Score
+            label='Ánimo'
+            value={draft.mood}
+            onChange={(mood) => setDraft((current) => ({ ...current, mood }))}
+          />
+
+          <div className='fixed bottom-0 left-0 right-0 border-t border-foreground/20 bg-background p-4 md:p-8'>
+            <div className='mx-auto flex max-w-2xl gap-3'>
+              {editing && (
+                <button
+                  type='button'
+                  onClick={() => setEditing(false)}
+                  className='border border-foreground/20 px-4 py-3 font-mono text-sm'
+                >
+                  Cancelar
+                </button>
+              )}
+              <button
+                type='button'
+                onClick={save}
+                disabled={isSaving}
+                className='flex-1 bg-primary px-4 py-3 font-mono text-primary-foreground disabled:opacity-50'
+              >
+                {isSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        saved && (
+          <div>
+            {RULES.map((item) => (
+              <Check key={item.key} on={saved[item.key]} label={item.label} />
+            ))}
+            <Check on={saved.exTennis || saved.exFootball || saved.exWalk || saved.exGym} label='Movimiento' />
+
+            <CheckedNames title='Ejercicio' items={EXERCISE} log={saved} />
+            <CheckedNames title='Arte' items={ART} log={saved} />
+
+            <div className='my-6 border-t border-foreground/20' />
+
+            <Metric label='Peso' value={showMeasure(saved.weight)} />
+            <Metric label='Energía' value={saved.energy == null ? '---' : `${saved.energy}/10`} />
+            <Metric label='Sueño' value={showMeasure(saved.sleepHours)} />
+            <Metric label='Ánimo' value={saved.mood == null ? '---' : `${saved.mood}/10`} />
+
+            <p className='mt-6 font-mono'>
+              🔥 Racha: {run} {run === 1 ? 'día' : 'días'}
+            </p>
+
+            <MonthStrip today={today} logs={history} />
+
+            <button type='button' onClick={openEdit} className='mt-8 font-mono text-sm text-primary underline'>
+              Editar
+            </button>
+          </div>
+        )
+      )}
+    </main>
+  );
+}
+
+function CheckedNames({
+  title,
+  items,
+  log,
+}: {
+  title: string;
+  items: ReadonlyArray<{ key: BoolKey; label: string }>;
+  log: DailyLog;
+}) {
+  const names = items.filter((item) => log[item.key]).map((item) => item.label);
+  if (names.length === 0) return null;
+
+  return (
+    <p className='mt-3 font-mono text-sm text-foreground/70'>
+      {title}: {names.join(', ')}
+    </p>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className='flex max-w-xs justify-between font-mono'>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+function MonthStrip({ today, logs }: { today: string; logs: DailyLog[] }) {
+  const byDate = new Map(logs.map((log) => [log.date, log]));
+
+  return (
+    <div className='mt-6 flex flex-wrap gap-1'>
+      {monthDates(today).map((date) => {
+        const entry = byDate.get(date);
+        const state = date > today ? 'future' : !entry ? 'empty' : isPerfect(entry) ? 'complete' : 'partial';
+        return (
+          <div
+            key={date}
+            className={cn(
+              'flex h-8 w-8 items-center justify-center font-mono text-xs',
+              date === today && 'ring-1 ring-foreground',
+              state === 'future' && 'text-foreground/25',
+              state === 'empty' && 'border border-foreground/20 text-foreground/40',
+              state === 'partial' && 'border border-primary/60 text-primary',
+              state === 'complete' && 'bg-primary text-primary-foreground'
+            )}
+          >
+            {Number(date.slice(8))}
+          </div>
+        );
+      })}
     </div>
   );
 }
