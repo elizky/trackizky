@@ -34,17 +34,21 @@ export function addDays(date: string, days: number): string {
   return `${y}-${m}-${d}`;
 }
 
-export function streak(logs: RuleLog[], today: string): number {
-  const perfect = new Set(logs.filter(isPerfect).map((log) => log.date));
+export function activeStreak<T extends { date: string }>(
+  logs: T[],
+  today: string,
+  active: (log: T) => boolean,
+): number {
+  const dates = new Set(logs.filter(active).map((log) => log.date));
   let count = 0;
   let cursor = addDays(today, -1);
 
-  while (perfect.has(cursor)) {
+  while (dates.has(cursor)) {
     count += 1;
     cursor = addDays(cursor, -1);
   }
 
-  if (perfect.has(today)) count += 1;
+  if (dates.has(today)) count += 1;
   return count;
 }
 
@@ -53,35 +57,40 @@ function assertStreak() {
     throw new Error(message);
   };
 
-  const perfect = (date: string): RuleLog => ({
-    date,
-    noAlcohol: true,
-    food: true,
-    water: true,
-    noScreens: true,
-    noDelivery: true,
-    noVice: true,
-    exTennis: true,
-    exFootball: false,
-    exWalk: false,
-    exGym: false,
-  });
-  const broken = (date: string): RuleLog => ({ ...perfect(date), water: false });
-
+  const day = (date: string, on: boolean) => ({ date, on });
   const today = '2026-10-03';
+  const on = (log: { on: boolean }) => log.on;
   const check = (actual: number, expected: number, message: string) => {
     if (actual !== expected) fail(`${message}: ${actual} !== ${expected}`);
   };
 
-  check(streak([], today), 0, 'empty');
-  check(streak([perfect(today)], today), 1, 'today only');
-  check(streak([perfect('2026-10-02')], today), 1, 'yesterday only');
-  check(streak([broken('2026-10-02')], today), 0, 'yesterday broken');
-  check(streak([broken('2026-10-02'), perfect(today)], today), 1, 'broken yesterday, perfect today');
-  check(streak([perfect('2026-10-01'), perfect('2026-10-02')], today), 2, 'two days, today missing');
-  check(streak([perfect('2026-10-01')], today), 0, 'gap at yesterday');
-  check(streak([perfect('2026-10-02'), broken(today)], today), 1, 'partial today keeps yesterday');
-  check(streak([perfect('2026-10-01'), broken('2026-10-02'), perfect(today)], today), 1, 'broken yesterday stops the walk');
+  check(activeStreak([], today, on), 0, 'empty');
+  check(activeStreak([day(today, true)], today, on), 1, 'today only');
+  check(activeStreak([day('2026-10-02', true)], today, on), 1, 'yesterday only');
+  check(activeStreak([day('2026-10-02', false)], today, on), 0, 'yesterday broken');
+  check(activeStreak([day('2026-10-02', false), day(today, true)], today, on), 1, 'broken yesterday, active today');
+  check(activeStreak([day('2026-10-01', true), day('2026-10-02', true)], today, on), 2, 'two days, today missing');
+  check(activeStreak([day('2026-10-01', true)], today, on), 0, 'gap at yesterday');
+  check(activeStreak([day('2026-10-02', true), day(today, false)], today, on), 1, 'inactive today keeps yesterday');
+  check(
+    activeStreak([day('2026-10-01', true), day('2026-10-02', false), day(today, true)], today, on),
+    1,
+    'broken yesterday stops the walk',
+  );
+
+  const logged = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06'].map(
+    (date) => ({ date }),
+  );
+  check(activeStreak(logged, '2026-10-06', () => true), 6, 'six logged days');
+  check(
+    activeStreak(
+      logged.map((log) => ({ ...log, on: log.date < '2026-10-06' })),
+      '2026-10-06',
+      (log) => log.on,
+    ),
+    5,
+    'five on, today off',
+  );
 
   console.log('streak ok');
 }

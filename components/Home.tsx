@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { isPerfect, streak } from '@/lib/challenge';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { activeStreak, isPerfect } from '@/lib/challenge';
 import { saveLog } from '@/lib/supabase/actions';
 import { DailyLog, emptyLog } from '@/lib/types';
 import { cn, daysInMonth, monthDates } from '@/lib/utils';
@@ -50,18 +51,22 @@ function Check({
   on,
   label,
   onToggle,
+  run,
 }: {
   on: boolean;
   label: string;
   onToggle?: () => void;
+  run?: number;
 }) {
   const mark = <span className={on ? 'text-primary' : 'text-foreground/30'}>{on ? '☑' : '☐'}</span>;
+  const streakMark = run ? <span className='ml-auto text-xs text-foreground/60'>🔥 {run}</span> : null;
 
   if (!onToggle) {
     return (
-      <div className='flex items-center gap-3 py-1.5 font-mono'>
+      <div className='flex w-full items-center gap-3 py-1.5 font-mono'>
         {mark}
         <span className={on ? '' : 'text-foreground/40'}>{label}</span>
+        {streakMark}
       </div>
     );
   }
@@ -70,6 +75,7 @@ function Check({
     <button type='button' onClick={onToggle} className='flex w-full items-center gap-3 py-1.5 text-left font-mono'>
       {mark}
       {label}
+      {streakMark}
     </button>
   );
 }
@@ -124,9 +130,26 @@ export default function Home({
   const [sleepHours, setSleepHours] = useState(formatMeasure(initialLog?.sleepHours ?? null));
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openDate, setOpenDate] = useState<string | null>(null);
 
   const day = Number(today.slice(8));
   const showForm = !log || editing;
+  const loggedRun = activeStreak(history, today, () => true);
+  const itemRun = (key: BoolKey) => activeStreak(history, today, (entry) => entry[key]);
+  const movementRun = activeStreak(
+    history,
+    today,
+    (entry) => entry.exTennis || entry.exFootball || entry.exWalk || entry.exGym,
+  );
+
+  useEffect(() => {
+    if (!openDate) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenDate(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openDate]);
 
   const toggle = (key: BoolKey) => {
     setDraft((current) => ({ ...current, [key]: !current[key] }));
@@ -172,15 +195,24 @@ export default function Home({
   };
 
   const saved = log;
-  const run = streak(history, today);
+  const opened = openDate ? history.find((entry) => entry.date === openDate) ?? null : null;
 
   return (
     <main className='mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 md:px-8'>
       <header className='mb-8'>
-        <h1 className='font-mono text-2xl text-primary'>OCTOBER RESET</h1>
+        <div className='flex items-center justify-between gap-4'>
+          <h1 className='font-mono text-2xl text-primary'>OCTOBER RESET</h1>
+          <Link href='/stats' className='font-mono text-sm text-foreground/70 underline'>
+            Stats
+          </Link>
+        </div>
         <p className='mt-2 font-mono text-sm text-foreground/70'>
           Día {String(day).padStart(2, '0')} / {daysInMonth(today)}
         </p>
+        <p className='mt-4 font-mono'>
+          🔥 Racha: {loggedRun} {loggedRun === 1 ? 'día' : 'días'}
+        </p>
+        <MonthStrip today={today} logs={history} onOpen={setOpenDate} />
       </header>
 
       {error && (
@@ -195,6 +227,7 @@ export default function Home({
                 key={item.key}
                 on={draft[item.key]}
                 label={item.label}
+                run={itemRun(item.key)}
                 onToggle={() => toggle(item.key)}
               />
             ))}
@@ -207,6 +240,7 @@ export default function Home({
                 key={item.key}
                 on={draft[item.key]}
                 label={item.label}
+                run={itemRun(item.key)}
                 onToggle={() => toggle(item.key)}
               />
             ))}
@@ -219,6 +253,7 @@ export default function Home({
                 key={item.key}
                 on={draft[item.key]}
                 label={item.label}
+                run={itemRun(item.key)}
                 onToggle={() => toggle(item.key)}
               />
             ))}
@@ -281,9 +316,13 @@ export default function Home({
         saved && (
           <div>
             {RULES.map((item) => (
-              <Check key={item.key} on={saved[item.key]} label={item.label} />
+              <Check key={item.key} on={saved[item.key]} label={item.label} run={itemRun(item.key)} />
             ))}
-            <Check on={saved.exTennis || saved.exFootball || saved.exWalk || saved.exGym} label='Movimiento' />
+            <Check
+              on={saved.exTennis || saved.exFootball || saved.exWalk || saved.exGym}
+              label='Movimiento'
+              run={movementRun}
+            />
 
             <CheckedNames title='Ejercicio' items={EXERCISE} log={saved} />
             <CheckedNames title='Arte' items={ART} log={saved} />
@@ -295,17 +334,14 @@ export default function Home({
             <Metric label='Sueño' value={showMeasure(saved.sleepHours)} />
             <Metric label='Ánimo' value={saved.mood == null ? '---' : `${saved.mood}/10`} />
 
-            <p className='mt-6 font-mono'>
-              🔥 Racha: {run} {run === 1 ? 'día' : 'días'}
-            </p>
-
-            <MonthStrip today={today} logs={history} />
-
             <button type='button' onClick={openEdit} className='mt-8 font-mono text-sm text-primary underline'>
               Editar
             </button>
           </div>
         )
+      )}
+      {openDate && (
+        <DayModal date={openDate} log={opened} onClose={() => setOpenDate(null)} />
       )}
     </main>
   );
@@ -339,7 +375,58 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MonthStrip({ today, logs }: { today: string; logs: DailyLog[] }) {
+const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+function dayLabel(date: string): string {
+  return `${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]}`;
+}
+
+function DayModal({ date, log, onClose }: { date: string; log: DailyLog | null; onClose: () => void }) {
+  return (
+    <div className='fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center' onClick={onClose}>
+      <div
+        role='dialog'
+        aria-modal='true'
+        aria-label={dayLabel(date)}
+        className='max-h-[80vh] w-full max-w-2xl overflow-y-auto border border-foreground/20 bg-background p-4'
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className='mb-4 flex items-center justify-between'>
+          <h2 className='font-mono text-lg text-primary'>{dayLabel(date)}</h2>
+          <button type='button' onClick={onClose} className='font-mono text-sm text-foreground/70'>
+            Cerrar
+          </button>
+        </div>
+        {log ? (
+          <>
+            {RULES.map((item) => (
+              <Check key={item.key} on={log[item.key]} label={item.label} />
+            ))}
+            <CheckedNames title='Ejercicio' items={EXERCISE} log={log} />
+            <CheckedNames title='Arte' items={ART} log={log} />
+            <div className='my-4 border-t border-foreground/20' />
+            <Metric label='Peso' value={showMeasure(log.weight)} />
+            <Metric label='Energía' value={log.energy == null ? '---' : `${log.energy}/10`} />
+            <Metric label='Sueño' value={showMeasure(log.sleepHours)} />
+            <Metric label='Ánimo' value={log.mood == null ? '---' : `${log.mood}/10`} />
+          </>
+        ) : (
+          <p className='font-mono text-sm text-foreground/60'>Sin registro</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MonthStrip({
+  today,
+  logs,
+  onOpen,
+}: {
+  today: string;
+  logs: DailyLog[];
+  onOpen: (date: string) => void;
+}) {
   const byDate = new Map(logs.map((log) => [log.date, log]));
 
   return (
@@ -348,8 +435,11 @@ function MonthStrip({ today, logs }: { today: string; logs: DailyLog[] }) {
         const entry = byDate.get(date);
         const state = date > today ? 'future' : !entry ? 'empty' : isPerfect(entry) ? 'complete' : 'partial';
         return (
-          <div
+          <button
             key={date}
+            type='button'
+            disabled={date > today}
+            onClick={() => onOpen(date)}
             className={cn(
               'flex h-8 w-8 items-center justify-center font-mono text-xs',
               date === today && 'ring-1 ring-foreground',
@@ -360,7 +450,7 @@ function MonthStrip({ today, logs }: { today: string; logs: DailyLog[] }) {
             )}
           >
             {Number(date.slice(8))}
-          </div>
+          </button>
         );
       })}
     </div>
