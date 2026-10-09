@@ -52,6 +52,27 @@ export function activeStreak<T extends { date: string }>(
   return count;
 }
 
+export function inactiveStreak<T extends { date: string }>(
+  logs: T[],
+  today: string,
+  active: (log: T) => boolean,
+): number {
+  if (logs.some((log) => log.date === today && active(log))) return 0;
+
+  const dates = new Set(logs.filter(active).map((log) => log.date));
+  const earliest = logs.reduce((min, log) => (log.date < min ? log.date : min), today);
+  let count = 0;
+  let cursor = addDays(today, -1);
+
+  while (cursor >= earliest) {
+    if (dates.has(cursor)) break;
+    count += 1;
+    cursor = addDays(cursor, -1);
+  }
+
+  return count;
+}
+
 function assertStreak() {
   const fail = (message: string) => {
     throw new Error(message);
@@ -90,6 +111,19 @@ function assertStreak() {
     ),
     5,
     'five on, today off',
+  );
+
+  const gap = logged.map((log) => ({ ...log, on: log.date === '2026-10-02' }));
+  check(inactiveStreak(gap, '2026-10-06', (log) => log.on), 3, 'three days since last time');
+  check(inactiveStreak(gap, '2026-10-02', (log) => log.on), 0, 'done today, no gap');
+  check(
+    inactiveStreak(
+      logged.map((log) => ({ ...log, on: false })),
+      '2026-10-06',
+      (log) => log.on,
+    ),
+    5,
+    'never done, count through yesterday',
   );
 
   console.log('streak ok');

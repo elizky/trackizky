@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { activeStreak, isPerfect } from '@/lib/challenge';
+import LogoutButton from '@/components/LogoutButton';
+import { activeStreak, inactiveStreak, isPerfect } from '@/lib/challenge';
+import { formatDuration, parseDuration } from '@/lib/duration';
 import { saveLog } from '@/lib/supabase/actions';
 import { DailyLog, emptyLog } from '@/lib/types';
 import { cn, daysInMonth, monthDates } from '@/lib/utils';
@@ -47,19 +49,29 @@ function showMeasure(value: number | null): string {
   return value == null ? '---' : String(value);
 }
 
+function showDuration(value: number | null): string {
+  return value == null ? '---' : formatDuration(value);
+}
+
 function Check({
   on,
   label,
   onToggle,
   run,
+  gap,
 }: {
   on: boolean;
   label: string;
   onToggle?: () => void;
   run?: number;
+  gap?: number;
 }) {
   const mark = <span className={on ? 'text-primary' : 'text-foreground/30'}>{on ? '☑' : '☐'}</span>;
-  const streakMark = run ? <span className='ml-auto text-xs text-foreground/60'>🔥 {run}</span> : null;
+  const streakMark = run ? (
+    <span className='ml-auto text-xs text-foreground/60'>🔥 {run}</span>
+  ) : gap ? (
+    <span className='ml-auto text-xs text-destructive'>↓ {gap}</span>
+  ) : null;
 
   if (!onToggle) {
     return (
@@ -127,7 +139,9 @@ export default function Home({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<DailyLog>(initialLog ?? emptyLog(today));
   const [weight, setWeight] = useState(formatMeasure(initialLog?.weight ?? null));
-  const [sleepHours, setSleepHours] = useState(formatMeasure(initialLog?.sleepHours ?? null));
+  const [sleepHours, setSleepHours] = useState(
+    initialLog?.sleepHours == null ? '' : formatDuration(initialLog.sleepHours),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openDate, setOpenDate] = useState<string | null>(null);
@@ -136,11 +150,10 @@ export default function Home({
   const showForm = !log || editing;
   const loggedRun = activeStreak(history, today, () => true);
   const itemRun = (key: BoolKey) => activeStreak(history, today, (entry) => entry[key]);
-  const movementRun = activeStreak(
-    history,
-    today,
-    (entry) => entry.exTennis || entry.exFootball || entry.exWalk || entry.exGym,
-  );
+  const itemGap = (key: BoolKey) => inactiveStreak(history, today, (entry) => entry[key]);
+  const moved = (entry: DailyLog) => entry.exTennis || entry.exFootball || entry.exWalk || entry.exGym;
+  const movementRun = activeStreak(history, today, moved);
+  const movementGap = inactiveStreak(history, today, moved);
 
   useEffect(() => {
     if (!openDate) return;
@@ -159,16 +172,16 @@ export default function Home({
     const source = log ?? emptyLog(today);
     setDraft(source);
     setWeight(formatMeasure(source.weight));
-    setSleepHours(formatMeasure(source.sleepHours));
+    setSleepHours(source.sleepHours == null ? '' : formatDuration(source.sleepHours));
     setError(null);
     setEditing(true);
   };
 
   const save = async () => {
     const parsedWeight = parseMeasure(weight);
-    const parsedSleep = parseMeasure(sleepHours);
+    const parsedSleep = parseDuration(sleepHours);
     if (Number.isNaN(parsedWeight) || Number.isNaN(parsedSleep)) {
-      setError('Peso o sueño no es un número.');
+      setError('Peso o sueño inválido.');
       return;
     }
 
@@ -202,9 +215,12 @@ export default function Home({
       <header className='mb-8'>
         <div className='flex items-center justify-between gap-4'>
           <h1 className='font-mono text-2xl text-primary'>OCTOBER RESET</h1>
-          <Link href='/stats' className='font-mono text-sm text-foreground/70 underline'>
-            Stats
-          </Link>
+          <div className='flex items-center gap-4'>
+            <Link href='/stats' className='font-mono text-sm text-foreground/70 underline'>
+              Stats
+            </Link>
+            <LogoutButton />
+          </div>
         </div>
         <p className='mt-2 font-mono text-sm text-foreground/70'>
           Día {String(day).padStart(2, '0')} / {daysInMonth(today)}
@@ -228,6 +244,7 @@ export default function Home({
                 on={draft[item.key]}
                 label={item.label}
                 run={itemRun(item.key)}
+                gap={itemGap(item.key)}
                 onToggle={() => toggle(item.key)}
               />
             ))}
@@ -241,6 +258,7 @@ export default function Home({
                 on={draft[item.key]}
                 label={item.label}
                 run={itemRun(item.key)}
+                gap={itemGap(item.key)}
                 onToggle={() => toggle(item.key)}
               />
             ))}
@@ -254,6 +272,7 @@ export default function Home({
                 on={draft[item.key]}
                 label={item.label}
                 run={itemRun(item.key)}
+                gap={itemGap(item.key)}
                 onToggle={() => toggle(item.key)}
               />
             ))}
@@ -272,7 +291,8 @@ export default function Home({
           <label className='mb-5 block'>
             <span className='mb-2 block font-mono text-sm'>Sueño</span>
             <input
-              inputMode='decimal'
+              inputMode='numeric'
+              placeholder='7:30'
               value={sleepHours}
               onChange={(event) => setSleepHours(event.target.value)}
               className='w-full border border-foreground/20 bg-transparent px-3 py-2 font-mono outline-none focus:border-primary'
@@ -316,12 +336,19 @@ export default function Home({
         saved && (
           <div>
             {RULES.map((item) => (
-              <Check key={item.key} on={saved[item.key]} label={item.label} run={itemRun(item.key)} />
+              <Check
+                key={item.key}
+                on={saved[item.key]}
+                label={item.label}
+                run={itemRun(item.key)}
+                gap={itemGap(item.key)}
+              />
             ))}
             <Check
               on={saved.exTennis || saved.exFootball || saved.exWalk || saved.exGym}
               label='Movimiento'
               run={movementRun}
+              gap={movementGap}
             />
 
             <CheckedNames title='Ejercicio' items={EXERCISE} log={saved} />
@@ -331,7 +358,7 @@ export default function Home({
 
             <Metric label='Peso' value={showMeasure(saved.weight)} />
             <Metric label='Energía' value={saved.energy == null ? '---' : `${saved.energy}/10`} />
-            <Metric label='Sueño' value={showMeasure(saved.sleepHours)} />
+            <Metric label='Sueño' value={showDuration(saved.sleepHours)} />
             <Metric label='Ánimo' value={saved.mood == null ? '---' : `${saved.mood}/10`} />
 
             <button type='button' onClick={openEdit} className='mt-8 font-mono text-sm text-primary underline'>
@@ -407,7 +434,7 @@ function DayModal({ date, log, onClose }: { date: string; log: DailyLog | null; 
             <div className='my-4 border-t border-foreground/20' />
             <Metric label='Peso' value={showMeasure(log.weight)} />
             <Metric label='Energía' value={log.energy == null ? '---' : `${log.energy}/10`} />
-            <Metric label='Sueño' value={showMeasure(log.sleepHours)} />
+            <Metric label='Sueño' value={showDuration(log.sleepHours)} />
             <Metric label='Ánimo' value={log.mood == null ? '---' : `${log.mood}/10`} />
           </>
         ) : (

@@ -6,9 +6,11 @@ function formatTick(value: number): string {
 export function LineChart({
   points,
   domain,
+  format = formatTick,
 }: {
   points: { date: string; value: number }[];
   domain?: [number, number];
+  format?: (value: number) => string;
 }) {
   if (points.length === 0) {
     return <p className='font-mono text-sm text-foreground/50'>Sin datos</p>;
@@ -25,7 +27,7 @@ export function LineChart({
   const height = 120;
   const top = 12;
   const bottom = 28;
-  const left = 36;
+  const left = 44;
   const yAt = (value: number) => top + (1 - (value - y0) / (y1 - y0)) * (height - top - bottom);
   const ticks = domain
     ? [domain[1], Math.round((domain[0] + domain[1]) / 2), domain[0]]
@@ -50,7 +52,7 @@ export function LineChart({
           fontSize='10'
           fontFamily='ui-monospace, monospace'
         >
-          {formatTick(tick)}
+          {format(tick)}
         </text>
       ))}
       <path d={path} fill='none' stroke='currentColor' strokeWidth='2' />
