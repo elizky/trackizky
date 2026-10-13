@@ -128,8 +128,10 @@ export async function getLogs(): Promise<DailyLog[]> {
   return (data ?? []).map(fromRow);
 }
 
-export async function saveLog(input: Omit<DailyLog, 'date'>): Promise<string | null> {
-  const date = todayInAR();
+export async function saveLog(input: DailyLog): Promise<string | null> {
+  const today = todayInAR();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || input.date > today) return 'Fecha inválida';
+  const date = input.date;
   let row;
   try {
     row = {

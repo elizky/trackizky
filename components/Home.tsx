@@ -67,11 +67,12 @@ function Check({
   gap?: number;
 }) {
   const mark = <span className={on ? 'text-primary' : 'text-foreground/30'}>{on ? '☑' : '☐'}</span>;
-  const streakMark = run ? (
-    <span className='ml-auto text-xs text-foreground/60'>🔥 {run}</span>
-  ) : gap ? (
-    <span className='ml-auto text-xs text-destructive'>↓ {gap}</span>
-  ) : null;
+  const streakMark =
+    run != null && run >= 3 ? (
+      <span className='ml-auto text-xs text-foreground/60'>🔥 {run}</span>
+    ) : gap != null && gap >= 3 ? (
+      <span className='ml-auto text-xs text-destructive'>↓ {gap}</span>
+    ) : null;
 
   if (!onToggle) {
     return (
@@ -137,6 +138,12 @@ export default function Home({
   const [log, setLog] = useState<DailyLog | null>(initialLog);
   const [history, setHistory] = useState(logs);
   const [editing, setEditing] = useState(false);
+  const [formDate, setFormDate] = useState(today);
+  const [todayBuffer, setTodayBuffer] = useState<{
+    draft: DailyLog;
+    weight: string;
+    sleep: string;
+  } | null>(null);
   const [draft, setDraft] = useState<DailyLog>(initialLog ?? emptyLog(today));
   const [weight, setWeight] = useState(formatMeasure(initialLog?.weight ?? null));
   const [sleepHours, setSleepHours] = useState(
@@ -168,13 +175,59 @@ export default function Home({
     setDraft((current) => ({ ...current, [key]: !current[key] }));
   };
 
-  const openEdit = () => {
-    const source = log ?? emptyLog(today);
+  const fillForm = (date: string, source: DailyLog) => {
     setDraft(source);
     setWeight(formatMeasure(source.weight));
     setSleepHours(source.sleepHours == null ? '' : formatDuration(source.sleepHours));
     setError(null);
+    setFormDate(date);
     setEditing(true);
+  };
+
+  const editDay = (date: string) => {
+    if (date > today) return;
+    if (date === formDate && (editing || !log)) {
+      setEditing(true);
+      setOpenDate(null);
+      return;
+    }
+    if (date === today && todayBuffer) {
+      setDraft(todayBuffer.draft);
+      setWeight(todayBuffer.weight);
+      setSleepHours(todayBuffer.sleep);
+      setTodayBuffer(null);
+      setFormDate(today);
+      setEditing(true);
+      setError(null);
+      setOpenDate(null);
+      return;
+    }
+    const formOpen = !log || editing;
+    if (date !== today && formOpen && formDate === today) {
+      setTodayBuffer({ draft, weight, sleep: sleepHours });
+    }
+    const source =
+      date === today
+        ? (log ?? emptyLog(today))
+        : (history.find((entry) => entry.date === date) ?? emptyLog(date));
+    fillForm(date, source);
+    setOpenDate(null);
+  };
+
+  const closeForm = () => {
+    if (formDate !== today && todayBuffer) {
+      setDraft(todayBuffer.draft);
+      setWeight(todayBuffer.weight);
+      setSleepHours(todayBuffer.sleep);
+      setTodayBuffer(null);
+      setFormDate(today);
+      setEditing(log != null);
+      setError(null);
+      return;
+    }
+    setFormDate(today);
+    setEditing(false);
+    setError(null);
   };
 
   const save = async () => {
@@ -189,7 +242,7 @@ export default function Home({
     setError(null);
     const next: DailyLog = {
       ...draft,
-      date: today,
+      date: formDate,
       weight: parsedWeight,
       sleepHours: parsedSleep,
     };
@@ -201,9 +254,9 @@ export default function Home({
       return;
     }
 
-    setLog(next);
-    setHistory((current) => [next, ...current.filter((entry) => entry.date !== today)]);
-    setEditing(false);
+    setHistory((current) => [next, ...current.filter((entry) => entry.date !== formDate)]);
+    if (formDate === today) setLog(next);
+    closeForm();
     setIsSaving(false);
   };
 
@@ -225,9 +278,9 @@ export default function Home({
         <p className='mt-2 font-mono text-sm text-foreground/70'>
           Día {String(day).padStart(2, '0')} / {daysInMonth(today)}
         </p>
-        <p className='mt-4 font-mono'>
-          🔥 Racha: {loggedRun} {loggedRun === 1 ? 'día' : 'días'}
-        </p>
+        {loggedRun >= 3 && (
+          <p className='mt-4 font-mono'>🔥 Racha: {loggedRun} días</p>
+        )}
         <MonthStrip today={today} logs={history} onOpen={setOpenDate} />
       </header>
 
@@ -237,6 +290,9 @@ export default function Home({
 
       {showForm ? (
         <div className='pb-24'>
+          {formDate !== today && (
+            <p className='mb-4 font-mono text-sm text-primary'>Editando {dayLabel(formDate)}</p>
+          )}
           <section className='mb-6'>
             {RULES.map((item) => (
               <Check
@@ -291,7 +347,7 @@ export default function Home({
           <label className='mb-5 block'>
             <span className='mb-2 block font-mono text-sm'>Sueño</span>
             <input
-              inputMode='numeric'
+              type='text'
               placeholder='7:30'
               value={sleepHours}
               onChange={(event) => setSleepHours(event.target.value)}
@@ -315,7 +371,7 @@ export default function Home({
               {editing && (
                 <button
                   type='button'
-                  onClick={() => setEditing(false)}
+                  onClick={closeForm}
                   className='border border-foreground/20 px-4 py-3 font-mono text-sm'
                 >
                   Cancelar
@@ -361,14 +417,19 @@ export default function Home({
             <Metric label='Sueño' value={showDuration(saved.sleepHours)} />
             <Metric label='Ánimo' value={saved.mood == null ? '---' : `${saved.mood}/10`} />
 
-            <button type='button' onClick={openEdit} className='mt-8 font-mono text-sm text-primary underline'>
+            <button type='button' onClick={() => editDay(today)} className='mt-8 font-mono text-sm text-primary underline'>
               Editar
             </button>
           </div>
         )
       )}
       {openDate && (
-        <DayModal date={openDate} log={opened} onClose={() => setOpenDate(null)} />
+        <DayModal
+          date={openDate}
+          log={opened}
+          onClose={() => setOpenDate(null)}
+          onEdit={() => editDay(openDate)}
+        />
       )}
     </main>
   );
@@ -408,7 +469,17 @@ function dayLabel(date: string): string {
   return `${Number(date.slice(8))} ${MONTHS[Number(date.slice(5, 7)) - 1]}`;
 }
 
-function DayModal({ date, log, onClose }: { date: string; log: DailyLog | null; onClose: () => void }) {
+function DayModal({
+  date,
+  log,
+  onClose,
+  onEdit,
+}: {
+  date: string;
+  log: DailyLog | null;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
   return (
     <div className='fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center' onClick={onClose}>
       <div
@@ -440,6 +511,9 @@ function DayModal({ date, log, onClose }: { date: string; log: DailyLog | null; 
         ) : (
           <p className='font-mono text-sm text-foreground/60'>Sin registro</p>
         )}
+        <button type='button' onClick={onEdit} className='mt-6 font-mono text-sm text-primary underline'>
+          Editar
+        </button>
       </div>
     </div>
   );

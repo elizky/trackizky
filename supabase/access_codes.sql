@@ -100,8 +100,8 @@ begin
     raise exception 'invalid code';
   end if;
 
-  if p_date <> (timezone('America/Argentina/Buenos_Aires', now()))::date then
-    raise exception 'solo se guarda el dia de hoy';
+  if p_date > (timezone('America/Argentina/Buenos_Aires', now()))::date then
+    raise exception 'no se puede guardar un dia futuro';
   end if;
 
   insert into daily_logs (
