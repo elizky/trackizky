@@ -1,10 +1,14 @@
 import Gate from '@/components/Gate';
-import Home from '@/components/Home';
-import { currentCode, getLogs } from '@/lib/supabase/actions';
+import Shell from '@/components/Shell';
+import { ArtTask } from '@/lib/art';
+import { currentCode, getArt, getLogs } from '@/lib/supabase/actions';
 import { DailyLog } from '@/lib/types';
 import { todayInAR } from '@/lib/utils';
 
 function setupMessage(message: string): string {
+  if (message.includes('art_for') || message.includes('art_tasks') || message.includes('art_projects')) {
+    return 'Falta correr supabase/art.sql en el SQL editor.';
+  }
   if (message.includes('resolve_code') || message.includes('access_codes') || message.includes('logs_for')) {
     return 'Falta correr supabase/access_codes.sql en el SQL editor. Cambiá CAMBIA-ESTE-CODIGO antes.';
   }
@@ -15,11 +19,16 @@ export default async function HomePage() {
   const today = todayInAR();
   let code: string | null = null;
   let logs: DailyLog[] = [];
+  let tasks: ArtTask[] = [];
   let errorMessage: string | null = null;
 
   try {
     code = await currentCode();
-    if (code) logs = await getLogs();
+    if (code) {
+      const [nextLogs, art] = await Promise.all([getLogs(), getArt()]);
+      logs = nextLogs;
+      tasks = art.tasks;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error al cargar';
     errorMessage = setupMessage(message);
@@ -33,6 +42,5 @@ export default async function HomePage() {
 
   if (!code) return <Gate today={today} />;
 
-  const initialLog = logs.find((log) => log.date === today) ?? null;
-  return <Home today={today} initialLog={initialLog} logs={logs} />;
+  return <Shell today={today} logs={logs} tasks={tasks} />;
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { ArtProject, ArtStatus, ArtTask } from '@/lib/art';
 import { DailyLog } from '@/lib/types';
 import { todayInAR } from '@/lib/utils';
 import { createClient } from './server';
@@ -108,6 +109,7 @@ export async function unlock(code: string): Promise<string | null> {
   (await cookies()).set(CODE_COOKIE, data, cookieOptions());
   revalidatePath('/');
   revalidatePath('/stats');
+  revalidatePath('/arte');
   return null;
 }
 
@@ -115,6 +117,7 @@ export async function logout(): Promise<void> {
   (await cookies()).delete(CODE_COOKIE);
   revalidatePath('/');
   revalidatePath('/stats');
+  revalidatePath('/arte');
 }
 
 export async function getLogs(): Promise<DailyLog[]> {
@@ -190,5 +193,81 @@ export async function saveLog(input: DailyLog): Promise<string | null> {
   if (error) return error.message;
   revalidatePath('/');
   revalidatePath('/stats');
+  return null;
+}
+
+type ArtPayload = {
+  projects?: Array<{ id: string; name: string; target: number; position: number }>;
+  tasks?: Array<{
+    id: string;
+    projectId: string;
+    title: string;
+    plannedDate: string;
+    position: number;
+    counts: boolean;
+    status: string;
+    note: string | null;
+  }>;
+};
+
+function artStatus(value: string): ArtStatus {
+  if (value === 'done' || value === 'cancelled') return value;
+  return 'pending';
+}
+
+function fromArt(data: unknown): { projects: ArtProject[]; tasks: ArtTask[] } {
+  const payload = (data ?? {}) as ArtPayload;
+  return {
+    projects: (payload.projects ?? []).map((project) => ({
+      id: project.id,
+      name: project.name,
+      target: project.target,
+      position: project.position,
+    })),
+    tasks: (payload.tasks ?? []).map((task) => ({
+      id: task.id,
+      projectId: task.projectId,
+      title: task.title,
+      plannedDate: String(task.plannedDate).slice(0, 10),
+      position: task.position,
+      counts: task.counts,
+      status: artStatus(task.status),
+      note: task.note,
+    })),
+  };
+}
+
+export async function getArt(): Promise<{ projects: ArtProject[]; tasks: ArtTask[] }> {
+  const code = (await cookies()).get(CODE_COOKIE)?.value;
+  if (!code) return { projects: [], tasks: [] };
+
+  const supabase = createClient(await cookies());
+  const { data, error } = await supabase.rpc('art_for', { p_code: code });
+  if (error) throw new Error(error.message);
+  return fromArt(data);
+}
+
+export async function resolveArtTask(
+  id: string,
+  status: 'done' | 'cancelled',
+  note: string,
+): Promise<string | null> {
+  const text = note.trim();
+  if (!text) return 'La nota es obligatoria';
+
+  const code = (await cookies()).get(CODE_COOKIE)?.value;
+  if (!code) return 'Entrá con tu código';
+
+  const supabase = createClient(await cookies());
+  const { error } = await supabase.rpc('resolve_art_task', {
+    p_code: code,
+    p_id: id,
+    p_status: status,
+    p_note: text,
+  });
+
+  if (error) return error.message;
+  revalidatePath('/');
+  revalidatePath('/arte');
   return null;
 }

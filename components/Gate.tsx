@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Home from '@/components/Home';
+import Shell from '@/components/Shell';
 import { unlock } from '@/lib/supabase/actions';
 
 export default function Gate({ today }: { today: string }) {
@@ -27,11 +27,11 @@ export default function Gate({ today }: { today: string }) {
   return (
     <div className='relative min-h-screen'>
       <div className='pointer-events-none min-h-screen select-none blur-md' aria-hidden='true'>
-        <Home today={today} initialLog={null} logs={[]} />
+        <Shell today={today} logs={[]} tasks={[]} />
       </div>
       <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'>
         <form onSubmit={submit} className='w-full max-w-sm border border-foreground/20 bg-background p-6'>
-          <h1 className='font-mono text-xl text-primary'>OCTOBER RESET</h1>
+          <h1 className='font-mono text-xl text-primary'>Trackizky</h1>
           <label className='mt-6 block'>
             <span className='mb-2 block font-mono text-sm'>Código</span>
             <input

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Gate from '@/components/Gate';
 import { LineChart } from '@/components/LineChart';
 import LogoutButton from '@/components/LogoutButton';
+import { RoutineMonth } from '@/components/Routine';
 import { formatDuration } from '@/lib/duration';
 import { currentCode, getLogs } from '@/lib/supabase/actions';
 import { DailyLog } from '@/lib/types';
@@ -47,6 +48,7 @@ function Series({
 }
 
 export default async function StatsPage() {
+  const today = todayInAR();
   let logs: DailyLog[] = [];
   let errorMessage: string | null = null;
   let code: string | null = null;
@@ -58,12 +60,12 @@ export default async function StatsPage() {
     errorMessage = error instanceof Error ? error.message : 'Error al cargar';
   }
 
-  if (!errorMessage && !code) return <Gate today={todayInAR()} />;
+  if (!errorMessage && !code) return <Gate today={today} />;
 
   return (
     <main className='mx-auto min-h-screen max-w-2xl px-4 py-8 md:px-8'>
       <header className='mb-8 flex items-center justify-between'>
-        <h1 className='font-mono text-2xl text-primary'>Stats</h1>
+        <h1 className='font-mono text-2xl text-primary'>Stats rutina</h1>
         <div className='flex items-center gap-4'>
           <Link href='/' className='font-mono text-sm text-foreground/70 underline'>
             Volver
@@ -75,6 +77,7 @@ export default async function StatsPage() {
         <p className='font-mono text-sm text-foreground/80'>{errorMessage}</p>
       ) : (
         <>
+          <RoutineMonth today={today} logs={logs} />
           <Series title='Peso' unit={(value) => String(value)} data={points(logs, (log) => log.weight)} />
           <Series
             title='Energía'
